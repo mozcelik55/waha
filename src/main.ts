@@ -1,3 +1,4 @@
+import * as basicAuth from 'express-basic-auth';
 import { NestFactory } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { WAHA_WEBHOOKS } from '@waha/structures/webhooks';
@@ -103,6 +104,26 @@ async function bootstrap() {
   AppModule.appReady(app, logger);
   app.enableShutdownHooks();
   const config = app.get(WhatsappConfigService);
+  //NEW ADDED BY MUZI
+// Basic auth for dashboard
+app.use('/dashboard', basicAuth({
+  users: { 'admin': process.env.AUTH_PASS || 'default' },
+  challenge: true,
+  unauthorizedResponse: 'Unauthorized',
+}));
+
+// API key check for API routes
+app.use('/api', (req, res, next) => {
+  const key = req.headers['x-api-key'];
+  if (key !== process.env.WAHA_API_KEY) {
+    return res.status(403).json({ error: 'Invalid API Key' });
+  }
+  next();
+});
+
+
+
+  //NEW ADDED ENDED
   await app.listen(config.port);
   logger.info(`WhatsApp HTTP API is running on: ${await app.getUrl()}`);
   logger.info(VERSION, 'Environment');
