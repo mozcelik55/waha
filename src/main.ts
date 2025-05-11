@@ -92,9 +92,12 @@ async function bootstrap() {
   app.use(urlencoded({ limit: '50mb', extended: false }));
   app.useWebSocketAdapter(new WsAdapter(app));
 
-  // Swagger setup
+  // New Swagger setup
+  
+if (process.env.NODE_ENV !== 'production') {
   const swaggerConfigurator = new SwaggerModule(app);
   swaggerConfigurator.configure(WAHA_WEBHOOKS);
+}
 
   // Protect dashboard
   app.use('/dashboard', basicAuth({
