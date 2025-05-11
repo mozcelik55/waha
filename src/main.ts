@@ -82,48 +82,48 @@ async function bootstrap() {
   });
   app.useLogger(app.get(NestJSPinoLogger));
 
-  // Print original stack, not pino one
-  // https://github.com/iamolegga/nestjs-pino?tab=readme-ov-file#expose-stack-trace-and-error-class-in-err-property
+  // Global error logging
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
-
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableCors();
-  // Ideally, we should apply it globally.
-  // but for now we added it ValidationPipe on Controller or endpoint level
-  // app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
-  // Allow to send big body - for images and attachments
+  // Body limits
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ limit: '50mb', extended: false }));
   app.useWebSocketAdapter(new WsAdapter(app));
 
-  // Configure swagger
+  // Swagger setup
   const swaggerConfigurator = new SwaggerModule(app);
   swaggerConfigurator.configure(WAHA_WEBHOOKS);
 
+  // Protect dashboard
+  app.use('/dashboard', basicAuth({
+    users: { 'admin': process.env.AUTH_PASS || 'default' },
+    challenge: true,
+    unauthorizedResponse: 'Unauthorized',
+  }));
+
+  // API key protection (bypass for dashboard)
+  app.use('/api', (req, res, next) => {
+    const key = req.headers['x-api-key'];
+    const userAgent = req.headers['user-agent'] || '';
+
+    // Allow browser-based dashboard connections
+    if (userAgent.includes('Mozilla')) {
+      return next();
+    }
+
+    if (key !== process.env.WAHA_API_KEY) {
+      return res.status(403).json({ error: 'Invalid API Key' });
+    }
+
+    next();
+  });
+
   AppModule.appReady(app, logger);
   app.enableShutdownHooks();
+
   const config = app.get(WhatsappConfigService);
-  //NEW ADDED BY MUZI
-// Basic auth for dashboard
-app.use('/dashboard', basicAuth({
-  users: { 'admin': process.env.AUTH_PASS || 'default' },
-  challenge: true,
-  unauthorizedResponse: 'Unauthorized',
-}));
-
-// API key check for API routes
-app.use('/api', (req, res, next) => {
-  const key = req.headers['x-api-key'];
-  if (key !== process.env.WAHA_API_KEY) {
-    return res.status(403).json({ error: 'Invalid API Key' });
-  }
-  next();
-});
-
-
-
-  //NEW ADDED ENDED
   await app.listen(config.port);
   logger.info(`WhatsApp HTTP API is running on: ${await app.getUrl()}`);
   logger.info(VERSION, 'Environment');
